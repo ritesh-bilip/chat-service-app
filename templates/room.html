@@ -237,7 +237,7 @@
       box-shadow: 0 3px 15px rgba(79, 172, 254, 0.4);
     }
 
-    
+
     .welcome-message {
       text-align: center;
       color: rgba(255, 255, 255, 0.6);
@@ -250,7 +250,7 @@
       margin-bottom: 15px;
     }
 
-    
+
     .online-indicator {
       display: inline-block;
       width: 8px;
@@ -323,10 +323,11 @@
       localStorage.setItem("access", token);
     }
 
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = 'chat-service-app-9xqu.onrender.com'; // ← your chat service domain, no trailing slash
     const chatSocket = new WebSocket(
-      'ws://127.0.0.1:8001/ws/chat/' + roomName + '/?token=' + token
+      `${wsProtocol}//${wsHost}/ws/chat/${roomName}/?token=${token}`
     );
-
     function getUserColor(username) {
       if (!username) return 'user-color-1';
       let hash = 0;
@@ -338,15 +339,15 @@
 
     chatSocket.onmessage = function (e) {
       const data = JSON.parse(e.data);
-      console.log('📨 Received:', data); 
+      console.log('📨 Received:', data);
 
       const chatLog = document.querySelector('#chat-log');
 
-      
+
       const welcomeMsg = chatLog.querySelector('.welcome-message');
       if (welcomeMsg) welcomeMsg.remove();
 
-      
+
       if (data.type === 'welcome') {
         const welcomeDiv = document.createElement('div');
         welcomeDiv.className = 'message system-message';
@@ -356,7 +357,7 @@
         return;
       }
 
-    
+
       if (data.type === 'message') {
         const messageDiv = document.createElement('div');
         const bubbleClass = getUserColor(data.user);
@@ -397,7 +398,7 @@
 
     document.querySelector('#chat-message-input').focus();
   </script>
-  
+
 </body>
 
 </html>

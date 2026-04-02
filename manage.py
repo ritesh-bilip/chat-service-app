@@ -3,13 +3,7 @@
 import os
 import sys
 
-# python manage.py shell
-from channels.layers import get_channel_layer
-channel_layer = get_channel_layer()
-print("✅ Redis Channel Layer Ready!")
-
 def main():
-    """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'djangochat.settings')
     try:
         from django.core.management import execute_from_command_line
@@ -20,7 +14,6 @@ def main():
             "forget to activate a virtual environment?"
         ) from exc
     execute_from_command_line(sys.argv)
-
 
 if __name__ == '__main__':
     main()

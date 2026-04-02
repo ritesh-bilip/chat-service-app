@@ -1,5 +1,4 @@
 import json
-import jwt
 from urllib.parse import parse_qs
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -18,62 +17,58 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_name = self.scope['url_route']['kwargs']['room_name']
         self.room_group_name = f"chat_{self.room_name}"
 
-        # Get token from query string
         qs = parse_qs(self.scope["query_string"].decode())
         token = qs.get("token", [None])[0]
-        
-        logger.info(f"🔐 Token: {token[:20] if token else 'MISSING'}...")
 
         if not token:
-            logger.error("❌ No token provided")
+            logger.error("No token provided")
             await self.close()
             return
 
-        # Validate JWT token
         try:
-            # Try SimpleJWT first
             access_token = AccessToken(token)
             user_id = access_token['user_id']
-            logger.info(f"✅ SimpleJWT success: user_id={user_id}")
         except Exception as e1:
+            import jwt
             try:
-                # Fallback: manual decode
-                payload = jwt.decode(token, settings.SIMPLE_JWT['SIGNING_KEY'], algorithms=['HS256'])
+                payload = jwt.decode(
+                    token,
+                    settings.SIMPLE_JWT['SIGNING_KEY'],
+                    algorithms=['HS256']
+                )
                 user_id = payload['user_id']
-                logger.info(f"✅ Manual JWT success: user_id={user_id}")
             except Exception as e2:
-                logger.error(f"❌ Token decode failed: {str(e1)}, {str(e2)}")
+                logger.error(f"Token decode failed: {e1} | {e2}")
                 await self.close()
                 return
 
-        # Get user from DB
         try:
             self.user = await self.get_user(user_id)
             self.username = self.user.username
-            logger.info(f"👤 User: {self.username}")
         except Exception as e:
-            logger.error(f"❌ User fetch failed: {str(e)}")
+            logger.error(f"User fetch failed: {e}")
             await self.close()
             return
 
-        # Join room
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
-        
-        # ✅ SEND WELCOME MESSAGE
+
         await self.send(text_data=json.dumps({
             "type": "welcome",
-            "message": f"✅ Welcome {self.username}! Chat connected!",
+            "message": f"Welcome {self.username}! You are connected.",
             "user": self.username
         }))
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+        if hasattr(self, 'room_group_name'):
+            await self.channel_layer.group_discard(
+                self.room_group_name, self.channel_name
+            )
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-        message = data['message'].strip()
-        
+        message = data.get('message', '').strip()
+
         if message:
             await self.save_message(message)
             await self.channel_layer.group_send(
@@ -84,6 +79,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "user": self.username
                 }
             )
+
+    async def chat_message(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "message",
+            "message": event["message"],
+            "user": event["user"]
+        }))
 
     @database_sync_to_async
     def get_user(self, user_id):
@@ -97,10 +99,3 @@ class ChatConsumer(AsyncWebsocketConsumer):
             room=self.room_name,
             date=datetime.now()
         )
-
-    async def chat_message(self, event):
-        await self.send(text_data=json.dumps({
-            "type": "message",
-            "message": event["message"],
-            "user": event["user"]
-        }))

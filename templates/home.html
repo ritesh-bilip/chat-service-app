@@ -1,0 +1,314 @@
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Django Chat - Enter Room</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      perspective: 1000px;
+    }
+
+    .main-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      padding: 20px;
+    }
+
+    /* 3D Card Effect */
+    .card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      width: 100%;
+      max-width: 450px;
+      box-shadow:
+        0 25px 45px rgba(0, 0, 0, 0.2),
+        0 0 100px rgba(79, 172, 254, 0.1),
+        inset 0 0 60px rgba(255, 255, 255, 0.1);
+      transform: rotateX(5deg);
+      transform-style: preserve-3d;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      animation: float 6s ease-in-out infinite;
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: rotateX(5deg) translateY(0);
+      }
+
+      50% {
+        transform: rotateX(5deg) translateY(-10px);
+      }
+    }
+
+    .card:hover {
+      transform: rotateX(0deg) translateY(-5px);
+      box-shadow:
+        0 35px 60px rgba(0, 0, 0, 0.3),
+        0 0 150px rgba(79, 172, 254, 0.2),
+        inset 0 0 60px rgba(255, 255, 255, 0.15);
+    }
+
+    h2 {
+      color: #fff;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 2.5rem;
+      text-shadow: 0 0 20px rgba(79, 172, 254, 0.8);
+      transform: translateZ(20px);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+      transform: translateZ(10px);
+    }
+
+    label {
+      display: block;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 15px 20px;
+      font-size: 1rem;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      outline: none;
+      transition: all 0.3s ease;
+      box-shadow:
+        inset 0 2px 10px rgba(0, 0, 0, 0.1),
+        0 0 0 rgba(79, 172, 254, 0);
+    }
+
+    input[type="text"]::placeholder {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    input[type="text"]:focus {
+      border-color: rgba(79, 172, 254, 0.8);
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow:
+        inset 0 2px 10px rgba(0, 0, 0, 0.1),
+        0 0 20px rgba(79, 172, 254, 0.3),
+        0 0 40px rgba(79, 172, 254, 0.1);
+    }
+
+    input[type="submit"] {
+      width: 100%;
+      padding: 16px 30px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 10px;
+      box-shadow:
+        0 10px 30px rgba(79, 172, 254, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      transform: translateZ(15px);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    input[type="submit"]:hover {
+      transform: translateY(-3px) translateZ(15px);
+      box-shadow:
+        0 15px 40px rgba(79, 172, 254, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        0 0 30px rgba(79, 172, 254, 0.4);
+    }
+
+    input[type="submit"]:active {
+      transform: translateY(2px) translateZ(10px);
+      box-shadow:
+        0 5px 20px rgba(79, 172, 254, 0.3),
+        inset 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Floating particles background */
+    .particles {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: -1;
+    }
+
+    .particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: rgba(79, 172, 254, 0.6);
+      border-radius: 50%;
+      animation: particle-float 15s infinite;
+    }
+
+    .particle:nth-child(1) {
+      left: 10%;
+      animation-delay: 0s;
+    }
+
+    .particle:nth-child(2) {
+      left: 20%;
+      animation-delay: 2s;
+    }
+
+    .particle:nth-child(3) {
+      left: 30%;
+      animation-delay: 4s;
+    }
+
+    .particle:nth-child(4) {
+      left: 40%;
+      animation-delay: 6s;
+    }
+
+    .particle:nth-child(5) {
+      left: 50%;
+      animation-delay: 8s;
+    }
+
+    .particle:nth-child(6) {
+      left: 60%;
+      animation-delay: 10s;
+    }
+
+    .particle:nth-child(7) {
+      left: 70%;
+      animation-delay: 12s;
+    }
+
+    .particle:nth-child(8) {
+      left: 80%;
+      animation-delay: 14s;
+    }
+
+    @keyframes particle-float {
+      0% {
+        transform: translateY(100vh) scale(0);
+        opacity: 0;
+      }
+
+      10% {
+        opacity: 1;
+        transform: translateY(90vh) scale(1);
+      }
+
+      90% {
+        opacity: 1;
+        transform: translateY(10vh) scale(1);
+      }
+
+      100% {
+        transform: translateY(0) scale(0);
+        opacity: 0;
+      }
+    }
+
+    /* Icon decoration */
+    .icon-container {
+      text-align: center;
+      margin-bottom: 20px;
+      transform: translateZ(25px);
+    }
+
+    .chat-icon {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow:
+        0 10px 30px rgba(79, 172, 254, 0.5),
+        inset 0 2px 0 rgba(255, 255, 255, 0.3);
+    }
+
+    .chat-icon::before {
+      content: "💬";
+      font-size: 28px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="particles">
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+  </div>
+
+  <div class="main-container">
+    <div class="card">
+      <div class="icon-container">
+        <div class="chat-icon"></div>
+      </div>
+
+      <h2>Django Chat</h2>
+
+      <form id="post-form" method="POST" action="checkview">
+        {% csrf_token %}
+        <div class="form-group">
+          <label>Room Name</label>
+          <input type="text" name="room_name" id="room_name" placeholder="Enter room name..." />
+        </div>
+        <input type="submit" value="Enter Room">
+      </form>
+    </div>
+  </div>
+   <script>
+    document.getElementById('post-form').addEventListener('submit', function(e) {
+      e.preventDefault(); 
+
+      fetch('/checkview', {
+        method: 'POST',
+        body: new FormData(document.getElementById('post-form'))
+      })
+      .then(res => res.json())  
+      .then(data => {
+        window.location.href = data.redirect; 
+      })
+      .catch(err => console.error('Error:', err));
+    });
+  </script>
+
+
+</body>
+
+</html>

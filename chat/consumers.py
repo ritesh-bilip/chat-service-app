@@ -1,92 +1,103 @@
 import json
 import jwt
+from urllib.parse import unquote
 from channels.generic.websocket import AsyncWebsocketConsumer
-from channels.db import database_sync_to_async
-from django.contrib.auth import get_user_model
 from django.conf import settings
 
-User = get_user_model()
 
 class ChatConsumer(AsyncWebsocketConsumer):
+
     async def connect(self):
         self.room_name = self.scope['url_route']['kwargs']['room_name']
         self.room_group_name = f'chat_{self.room_name}'
 
-        # Parse token and username variables cleanly out of the query string string layout
-        query_string = self.scope.get('query_string', b'').decode()
-        token = None
-        passed_username = None
-        
-        for param in query_string.split('&'):
-            if param.startswith('token='):
-                token = param.split('=')[1]
-            elif param.startswith('username='):
-                from urllib.parse import unquote
-                passed_username = unquote(param.split('=')[1])
+        # ── Parse query string safely ──────────────────────────────
+        # Old code used param.split('=')[1] which truncates tokens
+        # that contain '=' characters. split('=', 1) fixes that.
+        raw_qs = self.scope.get('query_string', b'').decode()
+        params = {}
+        for part in raw_qs.split('&'):
+            if '=' in part:
+                key, value = part.split('=', 1)   # maxsplit=1 is critical
+                params[key] = unquote(value)
 
-        # Authenticate and synchronize database structure safely
-        self.user = await self.get_user_from_token(token, passed_username)
+        token       = params.get('token')
+        passed_name = params.get('username', '').strip()
 
-        if self.user:
+        # ── Validate JWT and get the real username ─────────────────
+        self.username = self.get_username_from_token(token, passed_name)
+
+        if self.username:
             await self.channel_layer.group_add(self.room_group_name, self.channel_name)
             await self.accept()
-            
-            # Send welcome message
             await self.send(text_data=json.dumps({
                 'type': 'welcome',
-                'message': f'Welcome to {self.room_name}!'
+                'message': f'Welcome to {self.room_name}, {self.username}!'
             }))
         else:
-            await self.close(code=403)
+            await self.close(code=4003)
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
     async def receive(self, text_data):
-        text_data_json = json.loads(text_data)
-        message = text_data_json['message']
+        data    = json.loads(text_data)
+        message = data.get('message', '').strip()
+        if not message:
+            return
 
         await self.channel_layer.group_send(
             self.room_group_name,
             {
-                'type': 'chat_message',
+                'type':    'chat_message',
                 'message': message,
-                'user': self.user.username
+                'user':    self.username,
             }
         )
 
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
-            'type': 'message',
+            'type':    'message',
             'message': event['message'],
-            'user': event['user']
+            'user':    event['user'],
         }))
 
-    async def get_user_from_token(self, token, passed_username):
+    # ──────────────────────────────────────────────────────────────
+    # FIX: removed sync_user_to_db entirely.
+    #
+    # OLD: decoded JWT → got user_id → DB write on every connect
+    #      if DB write failed → silent 403
+    #
+    # NEW: decoded JWT → read payload.name directly
+    #      (name baked in by CustomRefreshToken in auth service)
+    #      no DB access, no failure point, faster connections
+    # ──────────────────────────────────────────────────────────────
+    def get_username_from_token(self, token, passed_name):
         if not token:
+            print("[WS] Rejected: no token")
             return None
         try:
-            payload = jwt.decode(token, settings.SIMPLE_JWT['SIGNING_KEY'], algorithms=["HS256"])
-            user_id = payload.get('user_id')
-            
-            # Fallback if front-end failed extraction loops
-            real_name = passed_username if (passed_username and passed_username != "Anonymous") else f'User_{user_id}'
-            
-            # Automatically builds or syncs profile context in SQLite records
-            user = await self.sync_user_to_db(user_id, real_name)
-            return user
-        except Exception as e:
-            print(f"Token validation/sync failed: {e}")
-            return None
+            signing_key = settings.SIMPLE_JWT.get('SIGNING_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(token, signing_key, algorithms=["HS256"])
 
-    @database_sync_to_async
-    def sync_user_to_db(self, user_id, real_name):
-        user, created = User.objects.get_or_create(
-            id=user_id,
-            defaults={'username': real_name}
-        )
-        if not created and user.username != real_name:
-            user.username = real_name
-            user.save()
-        return user
+            # Priority 1: name from JWT payload (set by CustomRefreshToken)
+            # Priority 2: username from URL param
+            # Priority 3: fallback to user_id
+            name = (
+                payload.get('name')
+                or (passed_name if passed_name and passed_name != 'Anonymous' else None)
+                or f"User_{payload.get('user_id', 'unknown')}"
+            )
+            print(f"[WS] Accepted: user='{name}' room='{self.room_name}'")
+            return name
+
+        except jwt.ExpiredSignatureError:
+            print("[WS] Rejected: token expired")
+        except jwt.InvalidSignatureError:
+            print("[WS] Rejected: invalid signature — JWT_SECRET mismatch?")
+        except jwt.DecodeError as e:
+            print(f"[WS] Rejected: decode error — {e}")
+        except Exception as e:
+            print(f"[WS] Rejected: unexpected — {e}")
+        return None
